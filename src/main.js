@@ -310,28 +310,34 @@ async function sendToGAS(record) {
     rawText: record.rawText || '',
   });
 
+  if (navigator.sendBeacon) {
+    const ok = navigator.sendBeacon(url, params);
+    return { success: ok };
+  }
+
+  // fallback: image beacon
   return new Promise((resolve) => {
     const img = new Image();
     const timer = setTimeout(() => resolve({ success: false, reason: 'timeout' }), 8000);
-    img.onload = img.onerror = () => {
-      clearTimeout(timer);
-      resolve({ success: true });
-    };
+    img.onload = img.onerror = () => { clearTimeout(timer); resolve({ success: true }); };
     img.src = `${url}?${params}`;
   });
 }
 
 function getGASCode() {
-  return `function doGet(e) {
+  return `function doGet(e)  { return handleRequest(e); }
+function doPost(e)  { return handleRequest(e); }
+
+function handleRequest(e) {
   var p = e.parameter;
   var action = p.action || 'record';
   var cb = p.callback;
 
   var result;
-  if (action === 'getProducts')    result = getProductsData();
+  if (action === 'getProducts')         result = getProductsData();
   else if (action === 'addProduct')     result = addProductData(p.name);
   else if (action === 'deleteProduct')  result = deleteProductData(p.name);
-  else                              result = recordEntryData(p);
+  else                                  result = recordEntryData(p);
 
   if (cb) {
     return ContentService
