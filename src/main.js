@@ -1072,11 +1072,6 @@ async function handleAction(action, dataset) {
 function init() {
   loadFromStorage();
 
-  // Auto-fetch products from GAS on startup
-  if (state.settings.gasUrl) {
-    fetchProductsFromGAS();
-  }
-
   // Single delegated event listeners
   document.body.addEventListener('click', (e) => {
     const el = e.target.closest('[data-action]');
