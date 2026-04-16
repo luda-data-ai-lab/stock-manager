@@ -308,8 +308,9 @@ async function sendToGAS(record) {
   });
 
   try {
-    await fetch(`${url}?${params}`, { mode: 'no-cors' });
-    return { success: true };
+    const res = await fetch(`${url}?${params}`);
+    const data = await res.json();
+    return { success: data.success === true };
   } catch (e) {
     return { success: false, reason: e.message };
   }
@@ -420,7 +421,7 @@ async function syncProductToGAS(action, name) {
   const url = state.settings.gasUrl?.trim();
   if (!url) return;
   try {
-    await fetch(`${url}?${new URLSearchParams({ action, name })}`, { mode: 'no-cors' });
+    await fetch(`${url}?${new URLSearchParams({ action, name })}`);
   } catch (e) { /* fire and forget */ }
 }
 
