@@ -300,7 +300,7 @@ async function sendToGAS(record) {
   const params = new URLSearchParams({
     type: record.type,
     product: record.product || '',
-    qty: `${record.qty}${record.unit}`,
+    qty: record.qty,
     date: record.date,
     time: record.time,
     manager: record.manager || '미설정',
