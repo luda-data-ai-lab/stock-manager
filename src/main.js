@@ -318,6 +318,68 @@ async function sendToGAS(record) {
 function getGASCode() {
   return `function doGet(e) {
   var p = e.parameter;
+  var action = p.action || 'record';
+
+  if (action === 'getProducts')    return getProducts();
+  if (action === 'addProduct')     return addProduct(p.name);
+  if (action === 'deleteProduct')  return deleteProduct(p.name);
+  return recordEntry(p);
+}
+
+function jsonResponse(obj) {
+  return ContentService
+    .createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function getProductSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('제품목록');
+  if (!sheet) {
+    sheet = ss.insertSheet('제품목록');
+    sheet.appendRow(['제품명']);
+    sheet.getRange(1,1,1,1)
+      .setBackground('#334155').setFontColor('#ffffff').setFontWeight('bold');
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+function getProducts() {
+  var sheet = getProductSheet();
+  var last = sheet.getLastRow();
+  if (last < 2) return jsonResponse({products: []});
+  var data = sheet.getRange(2, 1, last - 1, 1).getValues();
+  var products = data.map(function(r){ return r[0]; }).filter(Boolean);
+  return jsonResponse({products: products});
+}
+
+function addProduct(name) {
+  if (!name) return jsonResponse({success: false});
+  var sheet = getProductSheet();
+  // 중복 방지
+  var last = sheet.getLastRow();
+  if (last >= 2) {
+    var existing = sheet.getRange(2, 1, last - 1, 1).getValues().flat();
+    if (existing.indexOf(name) !== -1) return jsonResponse({success: true, duplicate: true});
+  }
+  sheet.appendRow([name]);
+  return jsonResponse({success: true});
+}
+
+function deleteProduct(name) {
+  if (!name) return jsonResponse({success: false});
+  var sheet = getProductSheet();
+  var last = sheet.getLastRow();
+  if (last < 2) return jsonResponse({success: true});
+  var data = sheet.getRange(2, 1, last - 1, 1).getValues();
+  for (var i = data.length - 1; i >= 0; i--) {
+    if (data[i][0] === name) { sheet.deleteRow(i + 2); break; }
+  }
+  return jsonResponse({success: true});
+}
+
+function recordEntry(p) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var today = p.date || Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd');
 
@@ -350,10 +412,36 @@ function getGASCode() {
   allSheet.appendRow([p.date,p.time,p.type,p.product,p.qty,p.manager,p.rawText]);
   allSheet.getRange(allSheet.getLastRow(), 1, 1, 7).setBackground(color);
 
-  return ContentService
-    .createTextOutput(JSON.stringify({success:true}))
-    .setMimeType(ContentService.MimeType.JSON);
+  return jsonResponse({success: true});
 }`;
+}
+
+async function syncProductToGAS(action, name) {
+  const url = state.settings.gasUrl?.trim();
+  if (!url) return;
+  try {
+    await fetch(`${url}?${new URLSearchParams({ action, name })}`, { mode: 'no-cors' });
+  } catch (e) { /* fire and forget */ }
+}
+
+async function fetchProductsFromGAS() {
+  const url = state.settings.gasUrl?.trim();
+  if (!url) { showToast('GAS URL을 먼저 설정해주세요.', 'error'); return; }
+  showToast('불러오는 중...', 'info');
+  try {
+    const res = await fetch(`${url}?${new URLSearchParams({ action: 'getProducts' })}`);
+    const data = await res.json();
+    if (Array.isArray(data.products)) {
+      // 로컬 + Sheets 합치기 (중복 제거)
+      const merged = [...new Set([...data.products, ...state.products])];
+      state.products = merged;
+      saveProducts();
+      render();
+      showToast(`✅ ${merged.length}개 제품 동기화 완료`, 'success');
+    }
+  } catch (e) {
+    showToast('불러오기 실패. GAS 배포 상태를 확인해주세요.', 'error');
+  }
 }
 
 // ============================================================
@@ -719,6 +807,13 @@ function renderProductsScreen() {
     <button class="btn-add dispatch-btn" data-action="add-product">추가</button>
   </div>
 
+  <div class="sync-bar">
+    <span class="sync-info">Sheets와 동기화</span>
+    <button class="btn-sync" data-action="sync-products">
+      ↕ Sheets 불러오기
+    </button>
+  </div>
+
   <div class="products-list">
     ${state.products.length === 0
       ? `<div class="empty-state"><p class="empty-icon">📦</p><p>등록된 제품이 없습니다.</p></div>`
@@ -862,6 +957,7 @@ async function handleAction(action, dataset) {
       saveProducts();
       render();
       showToast(`'${name}' 추가됨`, 'success');
+      syncProductToGAS('addProduct', name);
       // Re-focus input for rapid entry
       setTimeout(() => document.getElementById('newProduct')?.focus(), 50);
       break;
@@ -874,8 +970,13 @@ async function handleAction(action, dataset) {
       saveProducts();
       render();
       showToast(`'${name}' 삭제됨`, 'info');
+      syncProductToGAS('deleteProduct', name);
       break;
     }
+
+    case 'sync-products':
+      fetchProductsFromGAS();
+      break;
 
     case 'delete-record': {
       const idx = parseInt(dataset.idx);
