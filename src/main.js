@@ -2,6 +2,8 @@
 // CONSTANTS
 // ============================================================
 
+const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbwO96IlDCa93s1A4cRdal9zMEc5e_bGrMnuIUydAz-e4jmp3PTiQomQGs0TsTS9n6aeRw/exec';
+
 const UNITS = ['박스', '케이스', '봉지', '세트', '묶음', '다스', '개', '병', '캔', '봉', '팩', '장', '권', '통', '잔', '컵', '포', '롤'];
 
 // Longer patterns first to avoid partial matching
@@ -38,7 +40,7 @@ let state = {
   mode: 'dispatch',            // 'dispatch' | 'return'
   screen: 'main',              // 'main' | 'confirm' | 'candidates' | 'records' | 'settings' | 'products'
   products: [],
-  settings: { manager: '', gasUrl: '' },
+  settings: { manager: '', gasUrl: DEFAULT_GAS_URL },
   recognition: null,
   isListening: false,
   pendingRecord: null,
@@ -56,7 +58,7 @@ function loadFromStorage() {
   try {
     state.products = JSON.parse(localStorage.getItem('sm_products') || '[]');
     const saved = JSON.parse(localStorage.getItem('sm_settings') || '{}');
-    state.settings = { manager: saved.manager || '', gasUrl: saved.gasUrl || '' };
+    state.settings = { manager: saved.manager || '', gasUrl: saved.gasUrl || DEFAULT_GAS_URL };
   } catch (e) {
     console.error('Storage load error:', e);
   }
