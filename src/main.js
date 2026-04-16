@@ -322,11 +322,22 @@ function getGASCode() {
   return `function doGet(e) {
   var p = e.parameter;
   var action = p.action || 'record';
+  var cb = p.callback;
 
-  if (action === 'getProducts')    return getProducts();
-  if (action === 'addProduct')     return addProduct(p.name);
-  if (action === 'deleteProduct')  return deleteProduct(p.name);
-  return recordEntry(p);
+  var result;
+  if (action === 'getProducts')    result = getProductsData();
+  else if (action === 'addProduct')     result = addProductData(p.name);
+  else if (action === 'deleteProduct')  result = deleteProductData(p.name);
+  else                              result = recordEntryData(p);
+
+  if (cb) {
+    return ContentService
+      .createTextOutput(cb + '(' + JSON.stringify(result) + ')')
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
+  }
+  return ContentService
+    .createTextOutput(JSON.stringify(result))
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
 function jsonResponse(obj) {
@@ -348,41 +359,40 @@ function getProductSheet() {
   return sheet;
 }
 
-function getProducts() {
+function getProductsData() {
   var sheet = getProductSheet();
   var last = sheet.getLastRow();
-  if (last < 2) return jsonResponse({products: []});
+  if (last < 2) return {products: []};
   var data = sheet.getRange(2, 1, last - 1, 1).getValues();
   var products = data.map(function(r){ return r[0]; }).filter(Boolean);
-  return jsonResponse({products: products});
+  return {products: products};
 }
 
-function addProduct(name) {
-  if (!name) return jsonResponse({success: false});
+function addProductData(name) {
+  if (!name) return {success: false};
   var sheet = getProductSheet();
-  // 중복 방지
   var last = sheet.getLastRow();
   if (last >= 2) {
     var existing = sheet.getRange(2, 1, last - 1, 1).getValues().flat();
-    if (existing.indexOf(name) !== -1) return jsonResponse({success: true, duplicate: true});
+    if (existing.indexOf(name) !== -1) return {success: true, duplicate: true};
   }
   sheet.appendRow([name]);
-  return jsonResponse({success: true});
+  return {success: true};
 }
 
-function deleteProduct(name) {
-  if (!name) return jsonResponse({success: false});
+function deleteProductData(name) {
+  if (!name) return {success: false};
   var sheet = getProductSheet();
   var last = sheet.getLastRow();
-  if (last < 2) return jsonResponse({success: true});
+  if (last < 2) return {success: true};
   var data = sheet.getRange(2, 1, last - 1, 1).getValues();
   for (var i = data.length - 1; i >= 0; i--) {
     if (data[i][0] === name) { sheet.deleteRow(i + 2); break; }
   }
-  return jsonResponse({success: true});
+  return {success: true};
 }
 
-function recordEntry(p) {
+function recordEntryData(p) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var today = p.date || Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd');
 
@@ -415,16 +425,41 @@ function recordEntry(p) {
   allSheet.appendRow([p.date,p.time,p.type,p.product,p.qty,p.manager,p.rawText]);
   allSheet.getRange(allSheet.getLastRow(), 1, 1, 7).setBackground(color);
 
-  return jsonResponse({success: true});
+  return {success: true};
 }`;
+}
+
+function jsonpFetch(url, params) {
+  return new Promise((resolve, reject) => {
+    const cbName = '_gasCb_' + Date.now();
+    const script = document.createElement('script');
+    const timer = setTimeout(() => { cleanup(); reject(new Error('timeout')); }, 8000);
+    function cleanup() {
+      clearTimeout(timer);
+      delete window[cbName];
+      script.remove();
+    }
+    window[cbName] = (data) => { cleanup(); resolve(data); };
+    script.onerror = () => { cleanup(); reject(new Error('script error')); };
+    params.set('callback', cbName);
+    script.src = `${url}?${params}`;
+    document.head.appendChild(script);
+  });
+}
+
+function gasBeacon(url, params) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const timer = setTimeout(() => resolve({ success: false, reason: 'timeout' }), 8000);
+    img.onload = img.onerror = () => { clearTimeout(timer); resolve({ success: true }); };
+    img.src = `${url}?${params}`;
+  });
 }
 
 async function syncProductToGAS(action, name) {
   const url = state.settings.gasUrl?.trim();
   if (!url) return;
-  try {
-    await fetch(`${url}?${new URLSearchParams({ action, name })}`);
-  } catch (e) { /* fire and forget */ }
+  gasBeacon(url, new URLSearchParams({ action, name }));
 }
 
 async function fetchProductsFromGAS() {
@@ -432,18 +467,18 @@ async function fetchProductsFromGAS() {
   if (!url) { showToast('GAS URL을 먼저 설정해주세요.', 'error'); return; }
   showToast('불러오는 중...', 'info');
   try {
-    const res = await fetch(`${url}?${new URLSearchParams({ action: 'getProducts' })}`);
-    const data = await res.json();
+    const data = await jsonpFetch(url, new URLSearchParams({ action: 'getProducts' }));
     if (Array.isArray(data.products)) {
-      // 로컬 + Sheets 합치기 (중복 제거)
       const merged = [...new Set([...data.products, ...state.products])];
       state.products = merged;
       saveProducts();
       render();
       showToast(`✅ ${merged.length}개 제품 동기화 완료`, 'success');
+    } else {
+      showToast('불러오기 실패. GAS 코드를 재배포해주세요.', 'error');
     }
   } catch (e) {
-    showToast('불러오기 실패. GAS 배포 상태를 확인해주세요.', 'error');
+    showToast(`불러오기 실패: ${e.message}`, 'error');
   }
 }
 
