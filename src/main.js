@@ -767,7 +767,10 @@ function renderSettingsScreen() {
       <p class="setting-hint">Google Sheets 자동 기록을 위한 웹앱 URL</p>
     </div>
 
-    <button class="btn-full dispatch-btn" data-action="save-settings">저장</button>
+    <div class="btn-row">
+      <button class="btn-full dispatch-btn" data-action="save-settings">저장</button>
+      <button class="btn-full btn-secondary" data-action="test-gas">연결 테스트</button>
+    </div>
   </div>
 
   <div class="settings-group">
@@ -945,6 +948,26 @@ async function handleAction(action, dataset) {
       saveSettings();
       showToast('✅ 설정 저장됨', 'success');
       render();
+      break;
+    }
+
+    case 'test-gas': {
+      const url = (document.getElementById('stGasUrl')?.value?.trim()) || state.settings.gasUrl?.trim();
+      if (!url) { showToast('GAS URL을 먼저 입력하세요.', 'error'); break; }
+      showToast('연결 테스트 중...', 'info');
+      const testParams = new URLSearchParams({ action: 'getProducts' });
+      try {
+        const res = await fetch(`${url}?${testParams}`);
+        if (!res.ok) { showToast(`❌ 응답 오류: HTTP ${res.status}`, 'error'); break; }
+        const data = await res.json();
+        if (Array.isArray(data.products)) {
+          showToast(`✅ 연결 성공! 제품 ${data.products.length}개 확인됨`, 'success');
+        } else {
+          showToast('⚠️ 응답 형식 오류 — GAS 코드를 확인하세요.', 'error');
+        }
+      } catch (e) {
+        showToast(`❌ 연결 실패: ${e.message}`, 'error');
+      }
       break;
     }
 

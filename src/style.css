@@ -939,6 +939,12 @@ a { color: inherit; text-decoration: none; }
   margin-top: 4px;
 }
 
+.btn-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .hidden { display: none !important; }
 
 /* ============================================================
