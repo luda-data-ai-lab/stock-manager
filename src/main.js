@@ -954,20 +954,8 @@ async function handleAction(action, dataset) {
     case 'test-gas': {
       const url = (document.getElementById('stGasUrl')?.value?.trim()) || state.settings.gasUrl?.trim();
       if (!url) { showToast('GAS URL을 먼저 입력하세요.', 'error'); break; }
-      showToast('연결 테스트 중...', 'info');
-      const testParams = new URLSearchParams({ action: 'getProducts' });
-      try {
-        const res = await fetch(`${url}?${testParams}`);
-        if (!res.ok) { showToast(`❌ 응답 오류: HTTP ${res.status}`, 'error'); break; }
-        const data = await res.json();
-        if (Array.isArray(data.products)) {
-          showToast(`✅ 연결 성공! 제품 ${data.products.length}개 확인됨`, 'success');
-        } else {
-          showToast('⚠️ 응답 형식 오류 — GAS 코드를 확인하세요.', 'error');
-        }
-      } catch (e) {
-        showToast(`❌ 연결 실패: ${e.message}`, 'error');
-      }
+      window.open(`${url}?action=getProducts`, '_blank');
+      showToast('새 탭에서 GAS 응답을 확인하세요.', 'info');
       break;
     }
 
