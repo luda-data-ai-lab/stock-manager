@@ -303,6 +303,7 @@ async function sendToGAS(record) {
     type: record.type,
     product: record.product || '',
     qty: record.qty,
+    unit: record.unit || '',
     date: record.date,
     time: record.time,
     manager: record.manager || '미설정',
@@ -402,8 +403,8 @@ function recordEntryData(p) {
   var sheet = ss.getSheetByName(today);
   if (!sheet) {
     sheet = ss.insertSheet(today);
-    sheet.appendRow(['시간', '유형', '제품명', '수량', '담당자', '원본텍스트']);
-    sheet.getRange(1,1,1,6)
+    sheet.appendRow(['시간', '유형', '제품명', '수량', '단위', '담당자', '원본텍스트']);
+    sheet.getRange(1,1,1,7)
       .setBackground('#334155').setFontColor('#ffffff').setFontWeight('bold');
     sheet.setFrozenRows(1);
   }
@@ -412,8 +413,8 @@ function recordEntryData(p) {
   var allSheet = ss.getSheetByName('전체기록');
   if (!allSheet) {
     allSheet = ss.insertSheet('전체기록', 0);
-    allSheet.appendRow(['날짜','시간','유형','제품명','수량','담당자','원본텍스트']);
-    allSheet.getRange(1,1,1,7)
+    allSheet.appendRow(['날짜','시간','유형','제품명','수량','단위','담당자','원본텍스트']);
+    allSheet.getRange(1,1,1,8)
       .setBackground('#334155').setFontColor('#ffffff').setFontWeight('bold');
     allSheet.setFrozenRows(1);
   }
@@ -421,11 +422,11 @@ function recordEntryData(p) {
   // 출고=연파란, 반품=연노란
   var color = p.type === '출고' ? '#dbeafe' : '#fef9c3';
 
-  sheet.appendRow([p.time, p.type, p.product, p.qty, p.manager, p.rawText]);
-  sheet.getRange(sheet.getLastRow(), 1, 1, 6).setBackground(color);
+  sheet.appendRow([p.time, p.type, p.product, p.qty, p.unit, p.manager, p.rawText]);
+  sheet.getRange(sheet.getLastRow(), 1, 1, 7).setBackground(color);
 
-  allSheet.appendRow([p.date,p.time,p.type,p.product,p.qty,p.manager,p.rawText]);
-  allSheet.getRange(allSheet.getLastRow(), 1, 1, 7).setBackground(color);
+  allSheet.appendRow([p.date,p.time,p.type,p.product,p.qty,p.unit,p.manager,p.rawText]);
+  allSheet.getRange(allSheet.getLastRow(), 1, 1, 8).setBackground(color);
 
   return {success: true};
 }`;
@@ -1070,6 +1071,11 @@ async function handleAction(action, dataset) {
 
 function init() {
   loadFromStorage();
+
+  // Auto-fetch products from GAS on startup
+  if (state.settings.gasUrl) {
+    fetchProductsFromGAS();
+  }
 
   // Single delegated event listeners
   document.body.addEventListener('click', (e) => {
