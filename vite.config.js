@@ -15,7 +15,8 @@ export default defineConfig({
         background_color: '#0f172a',
         display: 'standalone',
         orientation: 'portrait-primary',
-        start_url: '/',
+        start_url: '/stock-manager/',
+        scope: '/stock-manager/',
         icons: [
           {
             src: 'icons/icon.svg',
