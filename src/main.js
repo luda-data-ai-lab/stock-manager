@@ -330,7 +330,7 @@ function processVoiceResult(text) {
   } else {
     state.screen = 'confirm';
     render();
-    startConfirmListen();
+    setTimeout(() => startConfirmListen(), 800);
   }
 }
 
