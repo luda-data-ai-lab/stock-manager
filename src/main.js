@@ -800,20 +800,13 @@ function renderSettingsScreen() {
     <div class="setting-field">
       <label class="setting-label">담당자 이름</label>
       <input type="text" id="stManager" class="setting-input"
-             value="${escHtml(state.settings.manager)}" placeholder="이름 입력">
+             value="${escHtml(state.settings.manager)}" placeholder="이름 입력"
+             data-action="autosave-manager">
     </div>
 
     <div class="setting-field">
       <label class="setting-label">Google Apps Script URL</label>
-      <input type="url" id="stGasUrl" class="setting-input"
-             value="${escHtml(state.settings.gasUrl)}"
-             placeholder="https://script.google.com/macros/s/.../exec">
-      <p class="setting-hint">Google Sheets 자동 기록을 위한 웹앱 URL</p>
-    </div>
-
-    <div class="btn-row">
-      <button class="btn-full dispatch-btn" data-action="save-settings">저장</button>
-      <button class="btn-full btn-secondary" data-action="test-gas">연결 테스트</button>
+      <div class="gas-url-display">${escHtml(DEFAULT_GAS_URL)}</div>
     </div>
   </div>
 
@@ -1072,6 +1065,15 @@ async function handleAction(action, dataset) {
 
 function init() {
   loadFromStorage();
+
+  // Auto-save manager name on blur
+  document.body.addEventListener('change', (e) => {
+    if (e.target.id === 'stManager') {
+      state.settings.manager = e.target.value.trim();
+      saveSettings();
+      showToast('✅ 담당자 저장됨', 'success');
+    }
+  });
 
   // Single delegated event listeners
   document.body.addEventListener('click', (e) => {

@@ -945,6 +945,17 @@ a { color: inherit; text-decoration: none; }
   gap: 8px;
 }
 
+.gas-url-display {
+  font-size: 11px;
+  color: var(--text-muted);
+  word-break: break-all;
+  padding: 8px 10px;
+  background: var(--surface);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  opacity: 0.6;
+}
+
 .hidden { display: none !important; }
 
 /* ============================================================
