@@ -309,12 +309,6 @@ async function sendToGAS(record) {
     rawText: record.rawText || '',
   });
 
-  if (navigator.sendBeacon) {
-    const ok = navigator.sendBeacon(url, params);
-    return { success: ok };
-  }
-
-  // fallback: image beacon
   return new Promise((resolve) => {
     const img = new Image();
     const timer = setTimeout(() => resolve({ success: false, reason: 'timeout' }), 8000);
