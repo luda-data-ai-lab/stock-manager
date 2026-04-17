@@ -722,12 +722,13 @@ function renderConfirmScreen() {
     </div>
   </div>
 
-  <div class="confirm-voice-hint ${state.confirmListening ? '' : 'hidden'}">
-    🎤 "오케이" 라고 말하면 저장됩니다
-  </div>
-
   <div class="confirm-actions">
     <button class="btn-cancel" data-action="go-main">취소</button>
+    <button class="confirm-ok-btn ${state.confirmListening ? 'ok-listening' : ''}"
+            data-action="toggle-confirm-mic">
+      <span class="ok-mic-icon">🎤</span>
+      <span class="ok-mic-label">${state.confirmListening ? '듣는 중... "오케이"' : '"오케이" 대기'}</span>
+    </button>
     <button class="btn-save ${mc}-btn" data-action="save-record">
       ${isDispatch ? '📤 출고 저장' : '📥 반품 저장'}
     </button>
@@ -963,6 +964,15 @@ async function handleAction(action, dataset) {
       else showToast('텍스트를 입력해주세요.', 'error');
       break;
     }
+
+    case 'toggle-confirm-mic':
+      if (state.confirmListening) {
+        stopConfirmListen();
+        render();
+      } else {
+        startConfirmListen();
+      }
+      break;
 
     case 'go-main':
       if (state.isListening) stopListening();
