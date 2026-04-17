@@ -956,6 +956,14 @@ a { color: inherit; text-decoration: none; }
   opacity: 0.6;
 }
 
+.confirm-voice-hint {
+  text-align: center;
+  font-size: 13px;
+  color: var(--dispatch);
+  padding: 8px;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
 .hidden { display: none !important; }
 
 /* ============================================================

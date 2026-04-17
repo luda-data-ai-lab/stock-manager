@@ -42,7 +42,9 @@ let state = {
   products: [],
   settings: { manager: '', gasUrl: DEFAULT_GAS_URL },
   recognition: null,
+  confirmRec: null,
   isListening: false,
+  confirmListening: false,
   pendingRecord: null,
   voiceText: '',
   candidates: [],
@@ -266,6 +268,45 @@ function stopListening() {
   state.isListening = false;
 }
 
+function startConfirmListen() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) return;
+
+  const rec = new SpeechRecognition();
+  rec.lang = 'ko-KR';
+  rec.continuous = false;
+  rec.interimResults = false;
+  rec.maxAlternatives = 3;
+  state.confirmRec = rec;
+  state.confirmListening = true;
+
+  rec.onresult = (event) => {
+    const results = Array.from(event.results[event.results.length - 1]);
+    const heard = results.map(r => r.transcript.trim().replace(/\s/g, ''));
+    if (heard.some(t => t.includes('오케이') || t.includes('OK') || t.includes('ok'))) {
+      state.confirmListening = false;
+      handleAction('save-record', {});
+    }
+  };
+
+  rec.onend = () => {
+    state.confirmListening = false;
+    render();
+  };
+
+  rec.onerror = () => {
+    state.confirmListening = false;
+    render();
+  };
+
+  try { rec.start(); } catch (e) {}
+}
+
+function stopConfirmListen() {
+  if (state.confirmRec) { try { state.confirmRec.stop(); } catch (e) {} }
+  state.confirmListening = false;
+}
+
 function processVoiceResult(text) {
   if (!text?.trim()) { showToast('음성이 인식되지 않았습니다. 다시 시도하세요.', 'error'); render(); return; }
 
@@ -285,10 +326,12 @@ function processVoiceResult(text) {
   if (parsed.confidence === 'none' || parsed.confidence === 'low') {
     state.candidates = parsed.candidates || [];
     state.screen = 'candidates';
+    render();
   } else {
     state.screen = 'confirm';
+    render();
+    startConfirmListen();
   }
-  render();
 }
 
 // ============================================================
@@ -663,6 +706,10 @@ function renderConfirmScreen() {
     </div>
   </div>
 
+  <div class="confirm-voice-hint ${state.confirmListening ? '' : 'hidden'}">
+    🎤 "오케이" 라고 말하면 저장됩니다
+  </div>
+
   <div class="confirm-actions">
     <button class="btn-cancel" data-action="go-main">취소</button>
     <button class="btn-save ${mc}-btn" data-action="save-record">
@@ -903,15 +950,16 @@ async function handleAction(action, dataset) {
 
     case 'go-main':
       if (state.isListening) stopListening();
+      stopConfirmListen();
       state.pendingRecord = null;
       state.screen = 'main';
       render();
       break;
 
-    case 'go-records':   state.screen = 'records';   render(); break;
-    case 'go-settings':  state.screen = 'settings';  render(); break;
-    case 'go-products':  state.screen = 'products';  render(); break;
-    case 'go-confirm':   state.screen = 'confirm';   render(); break;
+    case 'go-records':   stopConfirmListen(); state.screen = 'records';   render(); break;
+    case 'go-settings':  stopConfirmListen(); state.screen = 'settings';  render(); break;
+    case 'go-products':  stopConfirmListen(); state.screen = 'products';  render(); break;
+    case 'go-confirm':   state.screen = 'confirm';   render(); startConfirmListen(); break;
 
     case 'go-candidates':
       state.candidates = state.products.map(p => ({ product: p, score: 0 }));
