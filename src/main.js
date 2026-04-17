@@ -2,7 +2,7 @@
 // CONSTANTS
 // ============================================================
 
-const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbz1u6kZeHj8LSuGuEh8PdApVTLU1AedVRlAvVff_0Tg00UgBpeKYSdOrsfJC-2_HQoD0Q/exec';
+const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbwmkbpiC0DKBVn5II3WOXW5OWYzlH8KDWo8b5GVLQcDriM9V3zjl14CYhX54t8bl6rTPw/exec';
 
 const UNITS = ['박스', '케이스', '봉지', '세트', '묶음', '다스', '개', '병', '캔', '봉', '팩', '장', '권', '통', '잔', '컵', '포', '롤'];
 
