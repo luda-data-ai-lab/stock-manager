@@ -272,39 +272,55 @@ function startConfirmListen() {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) return;
 
-  const rec = new SpeechRecognition();
-  rec.lang = 'ko-KR';
-  rec.continuous = false;
-  rec.interimResults = false;
-  rec.maxAlternatives = 3;
-  state.confirmRec = rec;
   state.confirmListening = true;
+  render();
 
-  rec.onresult = (event) => {
-    const results = Array.from(event.results[event.results.length - 1]);
-    const heard = results.map(r => r.transcript.trim().replace(/\s/g, ''));
-    if (heard.some(t => t.includes('오케이') || t.includes('OK') || t.includes('ok'))) {
-      state.confirmListening = false;
-      handleAction('save-record', {});
-    }
-  };
+  function listen() {
+    if (state.screen !== 'confirm' || !state.confirmListening) return;
 
-  rec.onend = () => {
-    state.confirmListening = false;
-    render();
-  };
+    const rec = new SpeechRecognition();
+    rec.lang = 'ko-KR';
+    rec.continuous = false;
+    rec.interimResults = false;
+    rec.maxAlternatives = 3;
+    state.confirmRec = rec;
 
-  rec.onerror = () => {
-    state.confirmListening = false;
-    render();
-  };
+    rec.onresult = (event) => {
+      const results = Array.from(event.results[event.results.length - 1]);
+      const heard = results.map(r => r.transcript.trim().replace(/\s/g, ''));
+      if (heard.some(t => t.includes('오케이') || t.includes('OK') || t.includes('ok'))) {
+        state.confirmListening = false;
+        handleAction('save-record', {});
+      }
+    };
 
-  try { rec.start(); } catch (e) {}
+    rec.onend = () => {
+      if (state.screen === 'confirm' && state.confirmListening) {
+        setTimeout(listen, 300);
+      }
+    };
+
+    rec.onerror = (e) => {
+      if (e.error === 'not-allowed') {
+        state.confirmListening = false;
+        render();
+        return;
+      }
+      if (state.screen === 'confirm' && state.confirmListening) {
+        setTimeout(listen, 500);
+      }
+    };
+
+    try { rec.start(); } catch (e) {}
+  }
+
+  listen();
 }
 
 function stopConfirmListen() {
-  if (state.confirmRec) { try { state.confirmRec.stop(); } catch (e) {} }
   state.confirmListening = false;
+  if (state.confirmRec) { try { state.confirmRec.stop(); } catch (e) {} }
+  state.confirmRec = null;
 }
 
 function processVoiceResult(text) {
