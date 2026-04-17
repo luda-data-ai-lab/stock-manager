@@ -326,10 +326,22 @@ function stopConfirmListen() {
 function processVoiceResult(text) {
   if (!text?.trim()) { showToast('음성이 인식되지 않았습니다. 다시 시도하세요.', 'error'); render(); return; }
 
-  const parsed = extractProductAndQty(text, state.products);
+  // 반품: 쉼표 앞을 거래처로 파싱 (예: "셜리, 인절미 3개")
+  let partner = '';
+  let parseText = text;
+  if (state.mode === 'return') {
+    const commaIdx = text.indexOf(',');
+    if (commaIdx !== -1) {
+      partner = text.slice(0, commaIdx).trim();
+      parseText = text.slice(commaIdx + 1).trim();
+    }
+  }
+
+  const parsed = extractProductAndQty(parseText, state.products);
 
   state.pendingRecord = {
     type: state.mode === 'dispatch' ? '출고' : '반품',
+    partner,
     product: parsed.product,
     qty: parsed.qty,
     unit: parsed.unit,
@@ -359,6 +371,7 @@ async function sendToGAS(record) {
 
   const params = new URLSearchParams({
     type: record.type,
+    partner: record.partner || '',
     product: record.product || '',
     qty: record.qty,
     unit: record.unit || '',
@@ -461,8 +474,8 @@ function recordEntryData(p) {
   var sheet = ss.getSheetByName(today);
   if (!sheet) {
     sheet = ss.insertSheet(today);
-    sheet.appendRow(['시간', '유형', '제품명', '수량', '단위', '담당자', '원본텍스트']);
-    sheet.getRange(1,1,1,7)
+    sheet.appendRow(['시간', '유형', '거래처', '제품명', '수량', '단위', '담당자', '원본텍스트']);
+    sheet.getRange(1,1,1,8)
       .setBackground('#334155').setFontColor('#ffffff').setFontWeight('bold');
     sheet.setFrozenRows(1);
   }
@@ -471,8 +484,8 @@ function recordEntryData(p) {
   var allSheet = ss.getSheetByName('전체기록');
   if (!allSheet) {
     allSheet = ss.insertSheet('전체기록', 0);
-    allSheet.appendRow(['날짜','시간','유형','제품명','수량','단위','담당자','원본텍스트']);
-    allSheet.getRange(1,1,1,8)
+    allSheet.appendRow(['날짜','시간','유형','거래처','제품명','수량','단위','담당자','원본텍스트']);
+    allSheet.getRange(1,1,1,9)
       .setBackground('#334155').setFontColor('#ffffff').setFontWeight('bold');
     allSheet.setFrozenRows(1);
   }
@@ -480,11 +493,11 @@ function recordEntryData(p) {
   // 출고=연파란, 반품=연노란
   var color = p.type === '출고' ? '#dbeafe' : '#fef9c3';
 
-  sheet.appendRow([p.time, p.type, p.product, p.qty, p.unit, p.manager, p.rawText]);
-  sheet.getRange(sheet.getLastRow(), 1, 1, 7).setBackground(color);
+  sheet.appendRow([p.time, p.type, p.partner||'', p.product, p.qty, p.unit, p.manager, p.rawText]);
+  sheet.getRange(sheet.getLastRow(), 1, 1, 8).setBackground(color);
 
-  allSheet.appendRow([p.date,p.time,p.type,p.product,p.qty,p.unit,p.manager,p.rawText]);
-  allSheet.getRange(allSheet.getLastRow(), 1, 1, 8).setBackground(color);
+  allSheet.appendRow([p.date,p.time,p.type,p.partner||'',p.product,p.qty,p.unit,p.manager,p.rawText]);
+  allSheet.getRange(allSheet.getLastRow(), 1, 1, 9).setBackground(color);
 
   return {success: true};
 }`;
@@ -705,6 +718,13 @@ function renderConfirmScreen() {
       </div>
     </div>
 
+    ${!isDispatch ? `
+    <div class="confirm-field">
+      <label class="field-label">거래처</label>
+      <input type="text" id="cfPartner" class="confirm-input"
+             value="${escHtml(r.partner || '')}" placeholder="거래처명">
+    </div>` : ''}
+
     <div class="confirm-field">
       <label class="field-label">담당자</label>
       <input type="text" id="cfManager" class="confirm-input"
@@ -827,6 +847,7 @@ function renderRecordsScreen() {
             <div class="record-product">${escHtml(r.product || '(제품 미지정)')}</div>
             <div class="record-detail">
               <span class="record-qty">${r.qty}${r.unit}</span>
+              ${r.partner ? `<span class="record-partner">📍${escHtml(r.partner)}</span>` : ''}
               ${r.manager ? `<span class="record-manager">${escHtml(r.manager)}</span>` : ''}
               <span class="record-time">${r.time}</span>
             </div>
@@ -1014,10 +1035,11 @@ async function handleAction(action, dataset) {
       const qty = parseInt(document.getElementById('cfQty')?.value) || state.pendingRecord.qty;
       const unit = document.getElementById('cfUnit')?.value ?? state.pendingRecord.unit;
       const manager = document.getElementById('cfManager')?.value?.trim() ?? state.pendingRecord.manager;
+      const partner = document.getElementById('cfPartner')?.value?.trim() ?? state.pendingRecord.partner ?? '';
 
       if (!product) { showToast('제품명을 입력해주세요.', 'error'); break; }
 
-      const record = { ...state.pendingRecord, product, qty, unit, manager, id: Date.now(), synced: null };
+      const record = { ...state.pendingRecord, product, qty, unit, manager, partner, id: Date.now(), synced: null };
       saveRecord(record);
 
       // Update default manager if changed
