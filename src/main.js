@@ -296,8 +296,7 @@ function processVoiceResult(text) {
 // ============================================================
 
 async function sendToGAS(record) {
-  const url = state.settings.gasUrl?.trim();
-  if (!url) return { success: false, reason: 'no_url' };
+  const url = DEFAULT_GAS_URL;
 
   const params = new URLSearchParams({
     type: record.type,
@@ -466,14 +465,12 @@ function gasBeacon(url, params) {
 }
 
 async function syncProductToGAS(action, name) {
-  const url = state.settings.gasUrl?.trim();
-  if (!url) return;
+  const url = DEFAULT_GAS_URL;
   gasBeacon(url, new URLSearchParams({ action, name }));
 }
 
 async function fetchProductsFromGAS() {
-  const url = state.settings.gasUrl?.trim();
-  if (!url) { showToast('GAS URL을 먼저 설정해주세요.', 'error'); return; }
+  const url = DEFAULT_GAS_URL;
   showToast('불러오는 중...', 'info');
   try {
     const data = await jsonpFetch(url, new URLSearchParams({ action: 'getProducts' }));
@@ -999,9 +996,7 @@ async function handleAction(action, dataset) {
     }
 
     case 'test-gas': {
-      const url = (document.getElementById('stGasUrl')?.value?.trim()) || state.settings.gasUrl?.trim();
-      if (!url) { showToast('GAS URL을 먼저 입력하세요.', 'error'); break; }
-      window.open(`${url}?action=getProducts`, '_blank');
+      window.open(`${DEFAULT_GAS_URL}?action=getProducts`, '_blank');
       showToast('새 탭에서 GAS 응답을 확인하세요.', 'info');
       break;
     }
