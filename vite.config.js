@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['icons/icon.svg'],
+      includeAssets: ['icons/icon.png'],
       manifest: {
         name: 'StockManager - 재고 관리',
         short_name: 'StockMgr',
@@ -19,9 +19,9 @@ export default defineConfig({
         scope: '/stock-manager/',
         icons: [
           {
-            src: 'icons/icon.svg',
-            sizes: 'any',
-            type: 'image/svg+xml',
+            src: 'icons/icon.png',
+            sizes: '512x512',
+            type: 'image/png',
             purpose: 'any maskable'
           }
         ]
