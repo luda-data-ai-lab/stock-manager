@@ -2,7 +2,7 @@
 // CONSTANTS
 // ============================================================
 
-const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbwmkbpiC0DKBVn5II3WOXW5OWYzlH8KDWo8b5GVLQcDriM9V3zjl14CYhX54t8bl6rTPw/exec';
+const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycby8W-hoX-ubQHsB9_DZEUYcDXPLQveM-i07op5grIZ1BPBaFxSvLW4KRr_bEPuL5HhGFw/exec';
 
 const UNITS = ['박스', '케이스', '봉지', '세트', '묶음', '다스', '개', '병', '캔', '봉', '팩', '장', '권', '통', '잔', '컵', '포', '롤'];
 
@@ -558,7 +558,7 @@ function recordEntryData(p) {
   var sheet = ss.getSheetByName(today);
   if (!sheet) {
     sheet = ss.insertSheet(today);
-    sheet.appendRow(['시간', '유형', '납품처', '거래처', '제품명', '수량', '단위', '담당자', '원본텍스트']);
+    sheet.appendRow(['시간', '유형', '제품명', '수량', '단위', '담당자', '원본텍스트', '납품처', '거래처']);
     sheet.getRange(1,1,1,9)
       .setBackground('#334155').setFontColor('#ffffff').setFontWeight('bold');
     sheet.setFrozenRows(1);
@@ -568,7 +568,7 @@ function recordEntryData(p) {
   var allSheet = ss.getSheetByName('전체기록');
   if (!allSheet) {
     allSheet = ss.insertSheet('전체기록', 0);
-    allSheet.appendRow(['날짜','시간','유형','납품처','거래처','제품명','수량','단위','담당자','원본텍스트']);
+    allSheet.appendRow(['날짜','시간','유형','제품명','수량','단위','담당자','원본텍스트','납품처','거래처']);
     allSheet.getRange(1,1,1,10)
       .setBackground('#334155').setFontColor('#ffffff').setFontWeight('bold');
     allSheet.setFrozenRows(1);
@@ -577,10 +577,10 @@ function recordEntryData(p) {
   // 출고=연파란, 반품=연노란
   var color = p.type === '출고' ? '#dbeafe' : '#fef9c3';
 
-  sheet.appendRow([p.time, p.type, p.delivery||'', p.partner||'', p.product, p.qty, p.unit, p.manager, p.rawText]);
+  sheet.appendRow([p.time, p.type, p.product, p.qty, p.unit, p.manager, p.rawText, p.delivery||'', p.partner||'']);
   sheet.getRange(sheet.getLastRow(), 1, 1, 9).setBackground(color);
 
-  allSheet.appendRow([p.date,p.time,p.type,p.delivery||'',p.partner||'',p.product,p.qty,p.unit,p.manager,p.rawText]);
+  allSheet.appendRow([p.date, p.time, p.type, p.product, p.qty, p.unit, p.manager, p.rawText, p.delivery||'', p.partner||'']);
   allSheet.getRange(allSheet.getLastRow(), 1, 1, 10).setBackground(color);
 
   return {success: true};
