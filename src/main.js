@@ -2,7 +2,7 @@
 // CONSTANTS
 // ============================================================
 
-const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbxSOQabB9h6PoUSbiyE0LvgogF4WYamhvBZfCrMbeCPocYJt_I71OrUWWGJqqC0t0BzWQ/exec';
+const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbxZj2i1Gyr4ySqeb1aIVWOLm3vH-hS6LXkgGiNoIxbR5fjW3TvWlgmL-ST5KkPYIHyl3g/exec';
 
 const UNITS = ['박스', '케이스', '봉지', '세트', '묶음', '다스', '개', '병', '캔', '봉', '팩', '장', '권', '통', '잔', '컵', '포', '롤'];
 
@@ -49,7 +49,8 @@ let state = {
   screen: 'main',              // 'main' | 'confirm' | 'candidates' | 'records' | 'settings' | 'products' | 'deliveries'
   products: [],
   deliveries: [],              // dynamic list, loaded from localStorage, falls back to DEFAULT_DELIVERIES
-  returnCart: [],              // [{product, qty, unit, partner, deliveryCode, deliveryName, date, time, manager, rawText}]
+  dispatchCart: [],            // 출고 장바구니
+  returnCart: [],              // 반품 장바구니
   settings: { manager: '', gasUrl: DEFAULT_GAS_URL },
   recognition: null,
   confirmRec: null,
@@ -705,7 +706,8 @@ function renderMainScreen() {
   const isDispatch = state.mode === 'dispatch';
   const mc = isDispatch ? 'dispatch' : 'return';
   const hasProducts = state.products.length > 0;
-  const cartCount = state.returnCart.length;
+  const cart = isDispatch ? state.dispatchCart : state.returnCart;
+  const cartCount = cart.length;
 
   return `
 <div class="screen main-screen ${mc}-mode">
@@ -778,21 +780,21 @@ function renderMainScreen() {
     </div>
   </div>
 
-  ${!isDispatch && cartCount > 0 ? `
-  <div class="return-cart">
-    <div class="cart-header">
-      <span class="cart-title">📥 반품 목록 (${cartCount}개)</span>
-      <button class="btn-submit-cart return-btn" data-action="submit-cart">
+  ${cartCount > 0 ? `
+  <div class="return-cart" style="border-color:var(--${mc})">
+    <div class="cart-header" style="background:var(--${mc}-bg)">
+      <span class="cart-title" style="color:var(--${mc})">${isDispatch ? '📤 출고' : '📥 반품'} 목록 (${cartCount}개)</span>
+      <button class="btn-submit-cart ${mc}-btn" data-action="submit-cart">
         전송 (${cartCount}개)
       </button>
     </div>
     <div class="cart-items">
-      ${state.returnCart.map((item, i) => `
+      ${cart.map((item, i) => `
         <div class="cart-item">
           <div class="cart-item-body">
             <span class="cart-item-product">${escHtml(item.product || '(미지정)')}</span>
-            <span class="cart-item-qty">${item.qty}${item.unit}</span>
-            ${item.deliveryCode ? `<span class="cart-item-delivery">${escHtml(item.deliveryCode)}</span>` : ''}
+            <span class="cart-item-qty" style="color:var(--${mc})">${item.qty}${item.unit}</span>
+            ${item.deliveryCode ? `<span class="cart-item-delivery" style="background:var(--${mc})">${escHtml(item.deliveryCode)}</span>` : ''}
           </div>
           <button class="cart-item-del" data-action="remove-from-cart" data-idx="${i}">×</button>
         </div>`).join('')}
@@ -874,18 +876,9 @@ function renderConfirmScreen() {
 
   <div class="confirm-actions">
     <button class="btn-cancel" data-action="go-main">취소</button>
-    ${isDispatch ? `
-    <button class="confirm-ok-btn ${state.confirmListening ? 'ok-listening' : ''}"
-            data-action="toggle-confirm-mic">
-      <span class="ok-mic-icon">🎤</span>
-      <span class="ok-mic-label">${state.confirmListening ? '듣는 중... "오케이"' : '"오케이" 대기'}</span>
+    <button class="btn-save ${mc}-btn" data-action="add-to-cart">
+      ${isDispatch ? '📤' : '📥'} 장바구니 추가
     </button>
-    <button class="btn-save dispatch-btn" data-action="save-record">
-      📤 출고 저장
-    </button>` : `
-    <button class="btn-save return-btn" data-action="add-to-cart">
-      📥 장바구니 추가
-    </button>`}
   </div>
 </div>`;
 }
@@ -1187,7 +1180,7 @@ async function handleAction(action, dataset) {
     case 'go-settings':   stopConfirmListen(); state.screen = 'settings';   render(); break;
     case 'go-products':   stopConfirmListen(); state.screen = 'products';   render(); break;
     case 'go-deliveries': stopConfirmListen(); state.screen = 'deliveries'; render(); break;
-    case 'go-confirm':    state.screen = 'confirm'; render(); startConfirmListen(); break;
+    case 'go-confirm':    state.screen = 'confirm'; render(); break;
 
     case 'go-candidates':
       state.candidates = state.products.map(p => ({ product: p, score: 0 }));
@@ -1219,31 +1212,37 @@ async function handleAction(action, dataset) {
 
       if (!product) { showToast('제품명을 입력해주세요.', 'error'); break; }
 
-      state.returnCart.push({ ...state.pendingRecord, product, qty, unit, manager });
+      const isDispatchItem = state.pendingRecord.type === '출고';
+      const targetCart = isDispatchItem ? state.dispatchCart : state.returnCart;
+      targetCart.push({ ...state.pendingRecord, product, qty, unit, manager });
       state.pendingRecord = null;
       state.screen = 'main';
       state.voiceText = '';
       render();
-      showToast(`'${product}' 장바구니에 추가됨 (${state.returnCart.length}개)`, 'success');
+      showToast(`'${product}' 장바구니에 추가됨 (${targetCart.length}개)`, 'success');
       break;
     }
 
     case 'remove-from-cart': {
       const idx = parseInt(dataset.idx);
-      const item = state.returnCart[idx];
-      state.returnCart.splice(idx, 1);
+      const activeCart = state.mode === 'dispatch' ? state.dispatchCart : state.returnCart;
+      const item = activeCart[idx];
+      activeCart.splice(idx, 1);
       render();
       showToast(`'${item?.product || '항목'}' 제거됨`, 'info');
       break;
     }
 
     case 'submit-cart': {
-      if (state.returnCart.length === 0) break;
-      const cartItems = [...state.returnCart];
-      state.returnCart = [];
+      const activeCart = state.mode === 'dispatch' ? state.dispatchCart : state.returnCart;
+      if (activeCart.length === 0) break;
+      const cartItems = [...activeCart];
+      if (state.mode === 'dispatch') state.dispatchCart = [];
+      else state.returnCart = [];
       state.screen = 'main';
       render();
-      showToast(`📥 ${cartItems.length}개 반품 전송 중...`, 'info');
+      const label = state.mode === 'dispatch' ? '출고' : '반품';
+      showToast(`${cartItems.length}개 ${label} 전송 중...`, 'info');
 
       let successCount = 0;
       for (const item of cartItems) {
@@ -1255,7 +1254,7 @@ async function handleAction(action, dataset) {
       }
 
       if (successCount === cartItems.length) {
-        showToast(`✅ 반품 ${cartItems.length}개 전송 완료!`, 'success');
+        showToast(`✅ ${label} ${cartItems.length}개 전송 완료!`, 'success');
       } else {
         showToast(`⚠️ ${successCount}/${cartItems.length}개 전송 완료 (일부 실패)`, 'warning');
       }
