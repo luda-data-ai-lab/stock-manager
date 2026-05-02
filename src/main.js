@@ -547,20 +547,20 @@ function recordEntryData(p) {
   if (!sheet) {
     sheet = ss.insertSheet(today);
     sheet.appendRow(['시간', '유형', '제품명', '수량', '단위', '담당자', '원본텍스트', '납품처']);
-    sheet.getRange(1,1,1,8)
-      .setBackground('#334155').setFontColor('#ffffff').setFontWeight('bold');
     sheet.setFrozenRows(1);
   }
+  sheet.getRange(1,1,1,8)
+    .setBackground('#334155').setFontColor('#ffffff').setFontWeight('bold');
 
   // 전체기록 시트 가져오기 or 생성
   var allSheet = ss.getSheetByName('전체기록');
   if (!allSheet) {
     allSheet = ss.insertSheet('전체기록', 0);
     allSheet.appendRow(['날짜','시간','유형','제품명','수량','단위','담당자','원본텍스트','납품처']);
-    allSheet.getRange(1,1,1,9)
-      .setBackground('#334155').setFontColor('#ffffff').setFontWeight('bold');
     allSheet.setFrozenRows(1);
   }
+  allSheet.getRange(1,1,1,9)
+    .setBackground('#334155').setFontColor('#ffffff').setFontWeight('bold');
 
   // 출고=연파란, 반품=연노란
   var color = p.type === '출고' ? '#dbeafe' : '#fef9c3';
