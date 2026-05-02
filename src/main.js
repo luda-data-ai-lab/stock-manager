@@ -735,20 +735,19 @@ function renderMainScreen() {
   </div>
 
   <div class="voice-section">
-    ${!isDispatch ? `
     <div class="delivery-section">
       <p class="delivery-label">납품처 선택</p>
       <div class="delivery-btns">
         ${state.deliveries.map(d => `
-          <button class="delivery-btn ${state.selectedDelivery === d.code ? 'delivery-active' : ''}"
+          <button class="delivery-btn ${state.selectedDelivery === d.code ? (isDispatch ? 'delivery-active-dispatch' : 'delivery-active') : ''}"
                   data-action="select-delivery" data-code="${escHtml(d.code)}" title="${escHtml(d.name)}">
             ${escHtml(d.code)}
           </button>`).join('')}
       </div>
       ${state.selectedDelivery
-        ? `<p class="delivery-selected">📍 ${escHtml(state.deliveries.find(d => d.code === state.selectedDelivery)?.name || '')}</p>`
+        ? `<p class="delivery-selected" style="color:var(--${isDispatch ? 'dispatch' : 'return'})">📍 ${escHtml(state.deliveries.find(d => d.code === state.selectedDelivery)?.name || '')}</p>`
         : `<p class="delivery-none">납품처를 선택해주세요</p>`}
-    </div>` : ''}
+    </div>
     <p class="voice-hint">${isDispatch ? '출고할' : '반품할'} 제품과 수량을 말씀해주세요</p>
     ${!hasProducts ? `<div class="no-products-warn">⚠️ 등록된 제품이 없습니다. <button class="link-btn" data-action="go-products">제품 추가 →</button></div>` : ''}
 
@@ -847,11 +846,11 @@ function renderConfirmScreen() {
       </div>
     </div>
 
-    ${isReturn && r.deliveryCode ? `
+    ${r.deliveryCode ? `
     <div class="confirm-field">
       <label class="field-label">납품처</label>
       <div class="confirm-delivery-badge">
-        <span class="delivery-code-badge">${escHtml(r.deliveryCode)}</span>
+        <span class="delivery-code-badge" style="background:var(--${isDispatch ? 'dispatch' : 'return'})">${escHtml(r.deliveryCode)}</span>
         <span>${escHtml(r.deliveryName)}</span>
       </div>
     </div>` : ''}
@@ -1147,7 +1146,6 @@ async function handleAction(action, dataset) {
 
     case 'set-mode':
       state.mode = dataset.mode;
-      if (dataset.mode === 'dispatch') state.selectedDelivery = null;
       render();
       break;
 
@@ -1274,7 +1272,6 @@ async function handleAction(action, dataset) {
       if (!product) { showToast('제품명을 입력해주세요.', 'error'); break; }
 
       const record = { ...state.pendingRecord, product, qty, unit, manager, id: Date.now(), synced: null };
-      state.selectedDelivery = null;
       saveRecord(record);
 
       if (manager && manager !== state.settings.manager) {

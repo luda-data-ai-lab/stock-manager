@@ -1010,6 +1010,11 @@ a { color: inherit; text-decoration: none; }
   border-color: var(--return);
   color: #fff;
 }
+.delivery-btn.delivery-active-dispatch {
+  background: var(--dispatch);
+  border-color: var(--dispatch);
+  color: #fff;
+}
 .delivery-selected {
   font-size: 13px;
   color: var(--return);
