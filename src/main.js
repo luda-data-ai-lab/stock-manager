@@ -6,7 +6,7 @@ const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbwmkbpiC0DKBVn5
 
 const UNITS = ['박스', '케이스', '봉지', '세트', '묶음', '다스', '개', '병', '캔', '봉', '팩', '장', '권', '통', '잔', '컵', '포', '롤'];
 
-const DELIVERIES = [
+const DEFAULT_DELIVERIES = [
   { code: 'B', name: 'Blenheim Kosco' },
   { code: 'H', name: 'HY Shopping' },
   { code: 'R', name: 'Riccarton Kosco' },
@@ -46,8 +46,10 @@ const KOREAN_SINO_NUM = [
 
 let state = {
   mode: 'dispatch',            // 'dispatch' | 'return'
-  screen: 'main',              // 'main' | 'confirm' | 'candidates' | 'records' | 'settings' | 'products'
+  screen: 'main',              // 'main' | 'confirm' | 'candidates' | 'records' | 'settings' | 'products' | 'deliveries'
   products: [],
+  deliveries: [],              // dynamic list, loaded from localStorage, falls back to DEFAULT_DELIVERIES
+  returnCart: [],              // [{product, qty, unit, partner, deliveryCode, deliveryName, date, time, manager, rawText}]
   settings: { manager: '', gasUrl: DEFAULT_GAS_URL },
   recognition: null,
   confirmRec: null,
@@ -70,8 +72,13 @@ function loadFromStorage() {
     state.products = JSON.parse(localStorage.getItem('sm_products') || '[]');
     const saved = JSON.parse(localStorage.getItem('sm_settings') || '{}');
     state.settings = { manager: saved.manager || '', gasUrl: saved.gasUrl || DEFAULT_GAS_URL };
+    const savedDeliveries = JSON.parse(localStorage.getItem('sm_deliveries') || 'null');
+    state.deliveries = Array.isArray(savedDeliveries) && savedDeliveries.length > 0
+      ? savedDeliveries
+      : [...DEFAULT_DELIVERIES];
   } catch (e) {
     console.error('Storage load error:', e);
+    state.deliveries = [...DEFAULT_DELIVERIES];
   }
 }
 
@@ -81,6 +88,10 @@ function saveSettings() {
 
 function saveProducts() {
   localStorage.setItem('sm_products', JSON.stringify(state.products));
+}
+
+function saveDeliveries() {
+  localStorage.setItem('sm_deliveries', JSON.stringify(state.deliveries));
 }
 
 function getTodayKey() {
@@ -348,7 +359,7 @@ function processVoiceResult(text) {
 
   const parsed = extractProductAndQty(parseText, state.products);
 
-  const deliveryObj = DELIVERIES.find(d => d.code === state.selectedDelivery) || null;
+  const deliveryObj = state.deliveries.find(d => d.code === state.selectedDelivery) || null;
 
   state.pendingRecord = {
     type: state.mode === 'dispatch' ? '출고' : '반품',
@@ -413,10 +424,13 @@ function handleRequest(e) {
   var cb = p.callback;
 
   var result;
-  if (action === 'getProducts')         result = getProductsData();
-  else if (action === 'addProduct')     result = addProductData(p.name);
-  else if (action === 'deleteProduct')  result = deleteProductData(p.name);
-  else                                  result = recordEntryData(p);
+  if (action === 'getProducts')           result = getProductsData();
+  else if (action === 'addProduct')       result = addProductData(p.name);
+  else if (action === 'deleteProduct')    result = deleteProductData(p.name);
+  else if (action === 'getDeliveries')    result = getDeliveriesData();
+  else if (action === 'addDelivery')      result = addDeliveryData(p.code, p.name);
+  else if (action === 'deleteDelivery')   result = deleteDeliveryData(p.code);
+  else                                    result = recordEntryData(p);
 
   if (cb) {
     return ContentService
@@ -480,7 +494,7 @@ function deleteProductData(name) {
   return {success: true};
 }
 
-function initDeliverySheet() {
+function getDeliverySheet() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName('납품처');
   if (!sheet) {
@@ -489,9 +503,49 @@ function initDeliverySheet() {
     sheet.getRange(1,1,1,2)
       .setBackground('#334155').setFontColor('#ffffff').setFontWeight('bold');
     sheet.setFrozenRows(1);
-    var deliveries = [['B','Blenheim Kosco'],['H','HY Shopping'],['R','Riccarton Kosco'],['S','Shirley Kosco'],['P','Papanui Kosco']];
-    deliveries.forEach(function(d){ sheet.appendRow(d); });
+    var defaults = [['B','Blenheim Kosco'],['H','HY Shopping'],['R','Riccarton Kosco'],['S','Shirley Kosco'],['P','Papanui Kosco']];
+    defaults.forEach(function(d){ sheet.appendRow(d); });
   }
+  return sheet;
+}
+
+function getDeliveriesData() {
+  var sheet = getDeliverySheet();
+  var last = sheet.getLastRow();
+  if (last < 2) return {deliveries: []};
+  var data = sheet.getRange(2, 1, last - 1, 2).getValues();
+  var deliveries = data
+    .filter(function(r){ return r[0]; })
+    .map(function(r){ return {code: r[0], name: r[1]}; });
+  return {deliveries: deliveries};
+}
+
+function addDeliveryData(code, name) {
+  if (!code || !name) return {success: false};
+  var sheet = getDeliverySheet();
+  var last = sheet.getLastRow();
+  if (last >= 2) {
+    var existing = sheet.getRange(2, 1, last - 1, 1).getValues().flat();
+    if (existing.indexOf(code) !== -1) return {success: true, duplicate: true};
+  }
+  sheet.appendRow([code, name]);
+  return {success: true};
+}
+
+function deleteDeliveryData(code) {
+  if (!code) return {success: false};
+  var sheet = getDeliverySheet();
+  var last = sheet.getLastRow();
+  if (last < 2) return {success: true};
+  var data = sheet.getRange(2, 1, last - 1, 1).getValues();
+  for (var i = data.length - 1; i >= 0; i--) {
+    if (data[i][0] === code) { sheet.deleteRow(i + 2); break; }
+  }
+  return {success: true};
+}
+
+function initDeliverySheet() {
+  getDeliverySheet();
 }
 
 function recordEntryData(p) {
@@ -584,6 +638,26 @@ async function fetchProductsFromGAS() {
   }
 }
 
+async function fetchDeliveriesFromGAS() {
+  const url = DEFAULT_GAS_URL;
+  showToast('납품처 불러오는 중...', 'info');
+  try {
+    const data = await jsonpFetch(url, new URLSearchParams({ action: 'getDeliveries' }));
+    if (Array.isArray(data.deliveries)) {
+      const existing = new Map(state.deliveries.map(d => [d.code, d]));
+      data.deliveries.forEach(d => existing.set(d.code, d));
+      state.deliveries = [...existing.values()];
+      saveDeliveries();
+      render();
+      showToast(`✅ ${state.deliveries.length}개 납품처 동기화 완료`, 'success');
+    } else {
+      showToast('불러오기 실패. GAS 코드를 재배포해주세요.', 'error');
+    }
+  } catch (e) {
+    showToast(`불러오기 실패: ${e.message}`, 'error');
+  }
+}
+
 // ============================================================
 // TOAST
 // ============================================================
@@ -622,13 +696,14 @@ function render() {
   const app = document.getElementById('app');
   let html = '';
   switch (state.screen) {
-    case 'main':       html = renderMainScreen();       break;
-    case 'confirm':    html = renderConfirmScreen();    break;
-    case 'candidates': html = renderCandidatesScreen(); break;
-    case 'records':    html = renderRecordsScreen();    break;
-    case 'settings':   html = renderSettingsScreen();   break;
-    case 'products':   html = renderProductsScreen();   break;
-    default:           html = renderMainScreen();
+    case 'main':        html = renderMainScreen();        break;
+    case 'confirm':     html = renderConfirmScreen();     break;
+    case 'candidates':  html = renderCandidatesScreen();  break;
+    case 'records':     html = renderRecordsScreen();     break;
+    case 'settings':    html = renderSettingsScreen();    break;
+    case 'products':    html = renderProductsScreen();    break;
+    case 'deliveries':  html = renderDeliveriesScreen();  break;
+    default:            html = renderMainScreen();
   }
   app.innerHTML = html + `<div id="toast-container"></div>`;
 
@@ -643,6 +718,7 @@ function renderMainScreen() {
   const isDispatch = state.mode === 'dispatch';
   const mc = isDispatch ? 'dispatch' : 'return';
   const hasProducts = state.products.length > 0;
+  const cartCount = state.returnCart.length;
 
   return `
 <div class="screen main-screen ${mc}-mode">
@@ -676,14 +752,14 @@ function renderMainScreen() {
     <div class="delivery-section">
       <p class="delivery-label">납품처 선택</p>
       <div class="delivery-btns">
-        ${DELIVERIES.map(d => `
+        ${state.deliveries.map(d => `
           <button class="delivery-btn ${state.selectedDelivery === d.code ? 'delivery-active' : ''}"
-                  data-action="select-delivery" data-code="${d.code}" title="${escHtml(d.name)}">
-            ${d.code}
+                  data-action="select-delivery" data-code="${escHtml(d.code)}" title="${escHtml(d.name)}">
+            ${escHtml(d.code)}
           </button>`).join('')}
       </div>
       ${state.selectedDelivery
-        ? `<p class="delivery-selected">📍 ${escHtml(DELIVERIES.find(d => d.code === state.selectedDelivery)?.name || '')}</p>`
+        ? `<p class="delivery-selected">📍 ${escHtml(state.deliveries.find(d => d.code === state.selectedDelivery)?.name || '')}</p>`
         : `<p class="delivery-none">납품처를 선택해주세요</p>`}
     </div>` : ''}
     <p class="voice-hint">${isDispatch ? '출고할' : '반품할'} 제품과 수량을 말씀해주세요</p>
@@ -716,6 +792,28 @@ function renderMainScreen() {
     </div>
   </div>
 
+  ${!isDispatch && cartCount > 0 ? `
+  <div class="return-cart">
+    <div class="cart-header">
+      <span class="cart-title">📥 반품 목록 (${cartCount}개)</span>
+      <button class="btn-submit-cart return-btn" data-action="submit-cart">
+        전송 (${cartCount}개)
+      </button>
+    </div>
+    <div class="cart-items">
+      ${state.returnCart.map((item, i) => `
+        <div class="cart-item">
+          <div class="cart-item-body">
+            <span class="cart-item-product">${escHtml(item.product || '(미지정)')}</span>
+            <span class="cart-item-qty">${item.qty}${item.unit}</span>
+            ${item.deliveryCode ? `<span class="cart-item-delivery">${escHtml(item.deliveryCode)}</span>` : ''}
+            ${item.partner ? `<span class="cart-item-partner">${escHtml(item.partner)}</span>` : ''}
+          </div>
+          <button class="cart-item-del" data-action="remove-from-cart" data-idx="${i}">×</button>
+        </div>`).join('')}
+    </div>
+  </div>` : ''}
+
   <div class="info-bar">
     <span class="info-chip">제품 ${state.products.length}종 등록</span>
     <button class="link-btn" data-action="go-records">오늘 기록 보기 →</button>
@@ -729,13 +827,14 @@ function renderConfirmScreen() {
   const r = state.pendingRecord;
   if (!r) return renderMainScreen();
   const isDispatch = r.type === '출고';
+  const isReturn = !isDispatch;
   const mc = isDispatch ? 'dispatch' : 'return';
 
   return `
 <div class="screen confirm-screen">
   <header class="header">
     <button class="back-btn" data-action="go-main">‹ 뒤로</button>
-    <h2 class="header-title">저장 확인</h2>
+    <h2 class="header-title">${isReturn ? '반품 확인' : '저장 확인'}</h2>
     <div style="width:40px"></div>
   </header>
 
@@ -762,7 +861,7 @@ function renderConfirmScreen() {
       </div>
     </div>
 
-    ${!isDispatch && r.deliveryCode ? `
+    ${isReturn && r.deliveryCode ? `
     <div class="confirm-field">
       <label class="field-label">납품처</label>
       <div class="confirm-delivery-badge">
@@ -771,7 +870,7 @@ function renderConfirmScreen() {
       </div>
     </div>` : ''}
 
-    ${!isDispatch ? `
+    ${isReturn ? `
     <div class="confirm-field">
       <label class="field-label">거래처</label>
       <input type="text" id="cfPartner" class="confirm-input"
@@ -797,14 +896,18 @@ function renderConfirmScreen() {
 
   <div class="confirm-actions">
     <button class="btn-cancel" data-action="go-main">취소</button>
+    ${isDispatch ? `
     <button class="confirm-ok-btn ${state.confirmListening ? 'ok-listening' : ''}"
             data-action="toggle-confirm-mic">
       <span class="ok-mic-icon">🎤</span>
       <span class="ok-mic-label">${state.confirmListening ? '듣는 중... "오케이"' : '"오케이" 대기'}</span>
     </button>
-    <button class="btn-save ${mc}-btn" data-action="save-record">
-      ${isDispatch ? '📤 출고 저장' : '📥 반품 저장'}
-    </button>
+    <button class="btn-save dispatch-btn" data-action="save-record">
+      📤 출고 저장
+    </button>` : `
+    <button class="btn-save return-btn" data-action="add-to-cart">
+      📥 장바구니 추가
+    </button>`}
   </div>
 </div>`;
 }
@@ -944,10 +1047,14 @@ function renderSettingsScreen() {
   </div>
 
   <div class="settings-group">
-    <h3 class="group-title">제품 관리</h3>
+    <h3 class="group-title">관리</h3>
     <button class="settings-nav-btn" data-action="go-products">
       <span>📦 제품 목록 관리</span>
       <span class="nav-meta">${state.products.length}종 등록 →</span>
+    </button>
+    <button class="settings-nav-btn" data-action="go-deliveries">
+      <span>🚚 납품처 관리</span>
+      <span class="nav-meta">${state.deliveries.length}곳 등록 →</span>
     </button>
   </div>
 
@@ -994,6 +1101,43 @@ function renderProductsScreen() {
         <div class="product-list-item">
           <span class="product-list-name">${escHtml(p)}</span>
           <button class="product-del-btn" data-action="delete-product" data-idx="${i}">삭제</button>
+        </div>`).join('')}
+  </div>
+</div>`;
+}
+
+function renderDeliveriesScreen() {
+  return `
+<div class="screen products-screen">
+  <header class="header">
+    <button class="back-btn" data-action="go-settings">‹ 뒤로</button>
+    <h2 class="header-title">납품처 관리 (${state.deliveries.length})</h2>
+    <div style="width:40px"></div>
+  </header>
+
+  <div class="add-product-row">
+    <input type="text" id="newDeliveryCode" class="setting-input" style="max-width:70px"
+           placeholder='코드' maxlength="5">
+    <input type="text" id="newDeliveryName" class="setting-input"
+           placeholder='납품처명 (예: Blenheim Kosco)'>
+    <button class="btn-add dispatch-btn" data-action="add-delivery">추가</button>
+  </div>
+
+  <div class="sync-bar">
+    <span class="sync-info">Sheets와 동기화</span>
+    <button class="btn-sync" data-action="sync-deliveries">
+      ↕ Sheets 불러오기
+    </button>
+  </div>
+
+  <div class="products-list">
+    ${state.deliveries.length === 0
+      ? `<div class="empty-state"><p class="empty-icon">🚚</p><p>등록된 납품처가 없습니다.</p></div>`
+      : state.deliveries.map((d, i) => `
+        <div class="product-list-item">
+          <span class="delivery-code-badge" style="margin-right:8px">${escHtml(d.code)}</span>
+          <span class="product-list-name">${escHtml(d.name)}</span>
+          <button class="product-del-btn" data-action="delete-delivery" data-idx="${i}">삭제</button>
         </div>`).join('')}
   </div>
 </div>`;
@@ -1063,10 +1207,11 @@ async function handleAction(action, dataset) {
       render();
       break;
 
-    case 'go-records':   stopConfirmListen(); state.screen = 'records';   render(); break;
-    case 'go-settings':  stopConfirmListen(); state.screen = 'settings';  render(); break;
-    case 'go-products':  stopConfirmListen(); state.screen = 'products';  render(); break;
-    case 'go-confirm':   state.screen = 'confirm';   render(); startConfirmListen(); break;
+    case 'go-records':    stopConfirmListen(); state.screen = 'records';    render(); break;
+    case 'go-settings':   stopConfirmListen(); state.screen = 'settings';   render(); break;
+    case 'go-products':   stopConfirmListen(); state.screen = 'products';   render(); break;
+    case 'go-deliveries': stopConfirmListen(); state.screen = 'deliveries'; render(); break;
+    case 'go-confirm':    state.screen = 'confirm'; render(); startConfirmListen(); break;
 
     case 'go-candidates':
       state.candidates = state.products.map(p => ({ product: p, score: 0 }));
@@ -1089,6 +1234,59 @@ async function handleAction(action, dataset) {
       break;
     }
 
+    case 'add-to-cart': {
+      if (!state.pendingRecord) break;
+      const product = document.getElementById('cfProduct')?.value?.trim() ?? state.pendingRecord.product;
+      const qty = parseInt(document.getElementById('cfQty')?.value) || state.pendingRecord.qty;
+      const unit = document.getElementById('cfUnit')?.value ?? state.pendingRecord.unit;
+      const manager = document.getElementById('cfManager')?.value?.trim() ?? state.pendingRecord.manager;
+      const partner = document.getElementById('cfPartner')?.value?.trim() ?? state.pendingRecord.partner ?? '';
+
+      if (!product) { showToast('제품명을 입력해주세요.', 'error'); break; }
+
+      state.returnCart.push({ ...state.pendingRecord, product, qty, unit, manager, partner });
+      state.pendingRecord = null;
+      state.screen = 'main';
+      state.voiceText = '';
+      render();
+      showToast(`'${product}' 장바구니에 추가됨 (${state.returnCart.length}개)`, 'success');
+      break;
+    }
+
+    case 'remove-from-cart': {
+      const idx = parseInt(dataset.idx);
+      const item = state.returnCart[idx];
+      state.returnCart.splice(idx, 1);
+      render();
+      showToast(`'${item?.product || '항목'}' 제거됨`, 'info');
+      break;
+    }
+
+    case 'submit-cart': {
+      if (state.returnCart.length === 0) break;
+      const cartItems = [...state.returnCart];
+      state.returnCart = [];
+      state.screen = 'main';
+      render();
+      showToast(`📥 ${cartItems.length}개 반품 전송 중...`, 'info');
+
+      let successCount = 0;
+      for (const item of cartItems) {
+        const record = { ...item, id: Date.now() + Math.random(), synced: null };
+        saveRecord(record);
+        const result = await sendToGAS(record);
+        updateRecordSync(record.id, result.success);
+        if (result.success) successCount++;
+      }
+
+      if (successCount === cartItems.length) {
+        showToast(`✅ 반품 ${cartItems.length}개 전송 완료!`, 'success');
+      } else {
+        showToast(`⚠️ ${successCount}/${cartItems.length}개 전송 완료 (일부 실패)`, 'warning');
+      }
+      break;
+    }
+
     case 'save-record': {
       if (!state.pendingRecord) break;
       const product = document.getElementById('cfProduct')?.value?.trim() ?? state.pendingRecord.product;
@@ -1100,11 +1298,9 @@ async function handleAction(action, dataset) {
       if (!product) { showToast('제품명을 입력해주세요.', 'error'); break; }
 
       const record = { ...state.pendingRecord, product, qty, unit, manager, partner, id: Date.now(), synced: null };
-      // reset delivery selection after save
       state.selectedDelivery = null;
       saveRecord(record);
 
-      // Update default manager if changed
       if (manager && manager !== state.settings.manager) {
         state.settings.manager = manager;
         saveSettings();
@@ -1156,7 +1352,6 @@ async function handleAction(action, dataset) {
       render();
       showToast(`'${name}' 추가됨`, 'success');
       syncProductToGAS('addProduct', name);
-      // Re-focus input for rapid entry
       setTimeout(() => document.getElementById('newProduct')?.focus(), 50);
       break;
     }
@@ -1174,6 +1369,41 @@ async function handleAction(action, dataset) {
 
     case 'sync-products':
       fetchProductsFromGAS();
+      break;
+
+    case 'add-delivery': {
+      const codeEl = document.getElementById('newDeliveryCode');
+      const nameEl = document.getElementById('newDeliveryName');
+      const code = codeEl?.value?.trim().toUpperCase();
+      const name = nameEl?.value?.trim();
+      if (!code) { showToast('코드를 입력하세요.', 'error'); break; }
+      if (!name) { showToast('납품처명을 입력하세요.', 'error'); break; }
+      if (state.deliveries.find(d => d.code === code)) {
+        showToast('이미 등록된 코드입니다.', 'error'); break;
+      }
+      state.deliveries.push({ code, name });
+      saveDeliveries();
+      render();
+      showToast(`'${name}' 추가됨`, 'success');
+      gasBeacon(DEFAULT_GAS_URL, new URLSearchParams({ action: 'addDelivery', code, name }));
+      setTimeout(() => document.getElementById('newDeliveryCode')?.focus(), 50);
+      break;
+    }
+
+    case 'delete-delivery': {
+      const idx = parseInt(dataset.idx);
+      const d = state.deliveries[idx];
+      state.deliveries.splice(idx, 1);
+      if (state.selectedDelivery === d.code) state.selectedDelivery = null;
+      saveDeliveries();
+      render();
+      showToast(`'${d.name}' 삭제됨`, 'info');
+      gasBeacon(DEFAULT_GAS_URL, new URLSearchParams({ action: 'deleteDelivery', code: d.code }));
+      break;
+    }
+
+    case 'sync-deliveries':
+      fetchDeliveriesFromGAS();
       break;
 
     case 'delete-record': {
@@ -1244,6 +1474,9 @@ function init() {
     }
     if (e.key === 'Enter' && e.target.id === 'newProduct') {
       handleAction('add-product', {});
+    }
+    if (e.key === 'Enter' && e.target.id === 'newDeliveryName') {
+      handleAction('add-delivery', {});
     }
   });
 
