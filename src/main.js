@@ -6,6 +6,14 @@ const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbwmkbpiC0DKBVn5
 
 const UNITS = ['박스', '케이스', '봉지', '세트', '묶음', '다스', '개', '병', '캔', '봉', '팩', '장', '권', '통', '잔', '컵', '포', '롤'];
 
+const DELIVERIES = [
+  { code: 'B', name: 'Blenheim Kosco' },
+  { code: 'H', name: 'HY Shopping' },
+  { code: 'R', name: 'Riccarton Kosco' },
+  { code: 'S', name: 'Shirley Kosco' },
+  { code: 'P', name: 'Papanui Kosco' },
+];
+
 // Longer patterns first to avoid partial matching
 const KOREAN_NATIVE_NUM = [
   ['스물아홉', 29], ['스물여덟', 28], ['스물일곱', 27], ['스물여섯', 26],
@@ -45,6 +53,7 @@ let state = {
   confirmRec: null,
   isListening: false,
   confirmListening: false,
+  selectedDelivery: null,
   pendingRecord: null,
   voiceText: '',
   candidates: [],
@@ -339,9 +348,13 @@ function processVoiceResult(text) {
 
   const parsed = extractProductAndQty(parseText, state.products);
 
+  const deliveryObj = DELIVERIES.find(d => d.code === state.selectedDelivery) || null;
+
   state.pendingRecord = {
     type: state.mode === 'dispatch' ? '출고' : '반품',
     partner,
+    deliveryCode: deliveryObj?.code || '',
+    deliveryName: deliveryObj?.name || '',
     product: parsed.product,
     qty: parsed.qty,
     unit: parsed.unit,
@@ -371,6 +384,7 @@ async function sendToGAS(record) {
 
   const params = new URLSearchParams({
     type: record.type,
+    delivery: record.deliveryName || '',
     partner: record.partner || '',
     product: record.product || '',
     qty: record.qty,
@@ -466,16 +480,32 @@ function deleteProductData(name) {
   return {success: true};
 }
 
+function initDeliverySheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('납품처');
+  if (!sheet) {
+    sheet = ss.insertSheet('납품처');
+    sheet.appendRow(['코드', '납품처명']);
+    sheet.getRange(1,1,1,2)
+      .setBackground('#334155').setFontColor('#ffffff').setFontWeight('bold');
+    sheet.setFrozenRows(1);
+    var deliveries = [['B','Blenheim Kosco'],['H','HY Shopping'],['R','Riccarton Kosco'],['S','Shirley Kosco'],['P','Papanui Kosco']];
+    deliveries.forEach(function(d){ sheet.appendRow(d); });
+  }
+}
+
 function recordEntryData(p) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var today = p.date || Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd');
+
+  initDeliverySheet();
 
   // 날짜별 시트 가져오기 or 생성
   var sheet = ss.getSheetByName(today);
   if (!sheet) {
     sheet = ss.insertSheet(today);
-    sheet.appendRow(['시간', '유형', '거래처', '제품명', '수량', '단위', '담당자', '원본텍스트']);
-    sheet.getRange(1,1,1,8)
+    sheet.appendRow(['시간', '유형', '납품처', '거래처', '제품명', '수량', '단위', '담당자', '원본텍스트']);
+    sheet.getRange(1,1,1,9)
       .setBackground('#334155').setFontColor('#ffffff').setFontWeight('bold');
     sheet.setFrozenRows(1);
   }
@@ -484,8 +514,8 @@ function recordEntryData(p) {
   var allSheet = ss.getSheetByName('전체기록');
   if (!allSheet) {
     allSheet = ss.insertSheet('전체기록', 0);
-    allSheet.appendRow(['날짜','시간','유형','거래처','제품명','수량','단위','담당자','원본텍스트']);
-    allSheet.getRange(1,1,1,9)
+    allSheet.appendRow(['날짜','시간','유형','납품처','거래처','제품명','수량','단위','담당자','원본텍스트']);
+    allSheet.getRange(1,1,1,10)
       .setBackground('#334155').setFontColor('#ffffff').setFontWeight('bold');
     allSheet.setFrozenRows(1);
   }
@@ -493,11 +523,11 @@ function recordEntryData(p) {
   // 출고=연파란, 반품=연노란
   var color = p.type === '출고' ? '#dbeafe' : '#fef9c3';
 
-  sheet.appendRow([p.time, p.type, p.partner||'', p.product, p.qty, p.unit, p.manager, p.rawText]);
-  sheet.getRange(sheet.getLastRow(), 1, 1, 8).setBackground(color);
+  sheet.appendRow([p.time, p.type, p.delivery||'', p.partner||'', p.product, p.qty, p.unit, p.manager, p.rawText]);
+  sheet.getRange(sheet.getLastRow(), 1, 1, 9).setBackground(color);
 
-  allSheet.appendRow([p.date,p.time,p.type,p.partner||'',p.product,p.qty,p.unit,p.manager,p.rawText]);
-  allSheet.getRange(allSheet.getLastRow(), 1, 1, 9).setBackground(color);
+  allSheet.appendRow([p.date,p.time,p.type,p.delivery||'',p.partner||'',p.product,p.qty,p.unit,p.manager,p.rawText]);
+  allSheet.getRange(allSheet.getLastRow(), 1, 1, 10).setBackground(color);
 
   return {success: true};
 }`;
@@ -642,6 +672,20 @@ function renderMainScreen() {
   </div>
 
   <div class="voice-section">
+    ${!isDispatch ? `
+    <div class="delivery-section">
+      <p class="delivery-label">납품처 선택</p>
+      <div class="delivery-btns">
+        ${DELIVERIES.map(d => `
+          <button class="delivery-btn ${state.selectedDelivery === d.code ? 'delivery-active' : ''}"
+                  data-action="select-delivery" data-code="${d.code}" title="${escHtml(d.name)}">
+            ${d.code}
+          </button>`).join('')}
+      </div>
+      ${state.selectedDelivery
+        ? `<p class="delivery-selected">📍 ${escHtml(DELIVERIES.find(d => d.code === state.selectedDelivery)?.name || '')}</p>`
+        : `<p class="delivery-none">납품처를 선택해주세요</p>`}
+    </div>` : ''}
     <p class="voice-hint">${isDispatch ? '출고할' : '반품할'} 제품과 수량을 말씀해주세요</p>
     ${!hasProducts ? `<div class="no-products-warn">⚠️ 등록된 제품이 없습니다. <button class="link-btn" data-action="go-products">제품 추가 →</button></div>` : ''}
 
@@ -717,6 +761,15 @@ function renderConfirmScreen() {
         </select>
       </div>
     </div>
+
+    ${!isDispatch && r.deliveryCode ? `
+    <div class="confirm-field">
+      <label class="field-label">납품처</label>
+      <div class="confirm-delivery-badge">
+        <span class="delivery-code-badge">${escHtml(r.deliveryCode)}</span>
+        <span>${escHtml(r.deliveryName)}</span>
+      </div>
+    </div>` : ''}
 
     ${!isDispatch ? `
     <div class="confirm-field">
@@ -847,6 +900,7 @@ function renderRecordsScreen() {
             <div class="record-product">${escHtml(r.product || '(제품 미지정)')}</div>
             <div class="record-detail">
               <span class="record-qty">${r.qty}${r.unit}</span>
+              ${r.deliveryCode ? `<span class="record-delivery">${escHtml(r.deliveryCode)}</span>` : ''}
               ${r.partner ? `<span class="record-partner">📍${escHtml(r.partner)}</span>` : ''}
               ${r.manager ? `<span class="record-manager">${escHtml(r.manager)}</span>` : ''}
               <span class="record-time">${r.time}</span>
@@ -971,6 +1025,12 @@ async function handleAction(action, dataset) {
 
     case 'set-mode':
       state.mode = dataset.mode;
+      if (dataset.mode === 'dispatch') state.selectedDelivery = null;
+      render();
+      break;
+
+    case 'select-delivery':
+      state.selectedDelivery = dataset.code;
       render();
       break;
 
@@ -1040,6 +1100,8 @@ async function handleAction(action, dataset) {
       if (!product) { showToast('제품명을 입력해주세요.', 'error'); break; }
 
       const record = { ...state.pendingRecord, product, qty, unit, manager, partner, id: Date.now(), synced: null };
+      // reset delivery selection after save
+      state.selectedDelivery = null;
       saveRecord(record);
 
       // Update default manager if changed

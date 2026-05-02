@@ -976,6 +976,74 @@ a { color: inherit; text-decoration: none; }
   opacity: 0.6;
 }
 
+/* Delivery selection */
+.delivery-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  margin-bottom: 12px;
+}
+.delivery-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+.delivery-btns {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.delivery-btn {
+  flex: 1;
+  padding: 10px 4px;
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  border: 1.5px solid var(--border);
+  color: var(--text-2);
+  font-size: 16px;
+  font-weight: 700;
+  transition: all 0.15s;
+}
+.delivery-btn.delivery-active {
+  background: var(--return);
+  border-color: var(--return);
+  color: #fff;
+}
+.delivery-selected {
+  font-size: 13px;
+  color: var(--return);
+  font-weight: 500;
+  text-align: center;
+}
+.delivery-none {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
+}
+.confirm-delivery-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+.delivery-code-badge {
+  background: var(--return);
+  color: #fff;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+.record-delivery {
+  background: var(--return);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+
 .confirm-voice-hint {
   text-align: center;
   font-size: 13px;
